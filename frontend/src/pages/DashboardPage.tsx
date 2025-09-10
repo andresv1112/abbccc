@@ -1,197 +1,295 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
-import LoadingSpinner from '../components/LoadingSpinner';
-import ErrorMessage from '../components/ErrorMessage';
-import { routineService } from '../services/routineService';
-import { workoutService } from '../services/workoutService';
-import { Dumbbell, CalendarCheck, Clock, TrendingUp, List, PlusCircle, History } from 'lucide-react';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
+import { routineService } from '../services/routineService'
+import { workoutService } from '../services/workoutService'
+import LoadingSpinner from '../components/LoadingSpinner'
+import ErrorMessage from '../components/ErrorMessage'
+import { 
+  User, 
+  Activity, 
+  Target, 
+  TrendingUp, 
+  Calendar, 
+  Clock, 
+  Dumbbell,
+  Plus,
+  Play,
+  BarChart3
+} from 'lucide-react'
 
 const DashboardPage: React.FC = () => {
-  const { user, isLoading: authLoading } = useAuth();
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [routineStats, setRoutineStats] = useState<any>(null);
-  const [workoutStats, setWorkoutStats] = useState<any>(null);
-  const [recentWorkouts, setRecentWorkouts] = useState<any[]>([]);
+  const { user } = useAuth()
+  const [stats, setStats] = useState<any>(null)
+  const [recentWorkouts, setRecentWorkouts] = useState<any[]>([])
+  const [recentRoutines, setRecentRoutines] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => {
-    const fetchData = async () => {
-      if (authLoading) return; // Espera a que la autenticación cargue
+    loadDashboardData()
+  }, [])
 
-      try {
-        setIsLoading(true);
-        setError('');
+  const loadDashboardData = async () => {
+    try {
+      setIsLoading(true)
+      setError('')
 
-        // Realiza todas las llamadas a la API en paralelo para mejorar el rendimiento
-        const [
-          routineStatsData,
-          workoutStatsData,
-          recentWorkoutsData
-        ] = await Promise.all([
-          routineService.getStats(),
-          workoutService.getStats(),
-          workoutService.getRecentWorkouts()
-        ]);
+      const [workoutStats, routineStats, workouts, routines] = await Promise.all([
+        workoutService.getStats().catch(() => null),
+        routineService.getStats().catch(() => null),
+        workoutService.getRecentWorkouts().catch(() => []),
+        routineService.getRoutines({ limit: 5 }).catch(() => ({ routines: [] }))
+      ])
 
-        setRoutineStats(routineStatsData);
-        setWorkoutStats(workoutStatsData);
-        setRecentWorkouts(recentWorkoutsData);
-
-      } catch (err: any) {
-        console.error('Error al cargar los datos del dashboard:', err);
-        setError(err.response?.data?.message || 'Error al cargar los datos del dashboard.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [authLoading, user]); // Vuelve a cargar si el usuario cambia o el estado de autenticación carga
-
-  // Función auxiliar para formatear la duración de los entrenamientos
-  const formatDuration = (seconds?: number) => {
-    if (!seconds) return 'N/A';
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
+      setStats({
+        workouts: workoutStats,
+        routines: routineStats
+      })
+      setRecentWorkouts(workouts)
+      setRecentRoutines(routines.routines || [])
+    } catch (err: any) {
+      setError('Error al cargar los datos del dashboard')
+      console.error('Dashboard error:', err)
+    } finally {
+      setIsLoading(false)
     }
-    return `${minutes}m`;
-  };
+  }
 
-  // Muestra un spinner de carga mientras se autentica o se cargan los datos
-  if (authLoading || isLoading) {
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return 'N/A'
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+  }
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <LoadingSpinner size="lg" />
       </div>
-    );
-  }
-
-  // Muestra un mensaje de error si algo falla al cargar los datos
-  if (error) {
-    return (
-      <div className="py-8">
-        <ErrorMessage message={error} onRetry={() => window.location.reload()} />
-      </div>
-    );
+    )
   }
 
   return (
     <div className="px-4 py-8">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">
-        Bienvenido, {user?.username}!
-      </h1>
+      {/* Welcome Section */}
+      <div className="mb-8">
+        <div className="flex items-center space-x-3 mb-2">
+          <User className="h-8 w-8 text-primary-600" />
+          <h1 className="text-3xl font-bold text-gray-900">
+            ¡Hola, {user?.username}!
+          </h1>
+        </div>
+        <p className="text-gray-600">
+          Aquí tienes un resumen de tu progreso y actividad reciente.
+        </p>
+      </div>
 
-      {/* Sección de estadísticas resumidas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
-        {/* Tarjeta: Rutinas Creadas */}
-        <div className="bg-white rounded-lg shadow-md p-6 flex items-center space-x-4">
-          <div className="p-3 bg-primary-100 rounded-full">
-            <Dumbbell className="h-6 w-6 text-primary-600" />
+      {error && <ErrorMessage message={error} onRetry={loadDashboardData} />}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {/* Total Workouts */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Entrenamientos</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {stats?.workouts?.totalWorkouts || 0}
+              </p>
+            </div>
+            <Activity className="h-8 w-8 text-blue-600" />
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Rutinas Creadas</p>
-            <p className="text-2xl font-semibold text-gray-900">{routineStats?.totalRoutines || 0}</p>
-          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            {stats?.workouts?.completedWorkouts || 0} completados
+          </p>
         </div>
 
-        {/* Tarjeta: Entrenamientos Completados */}
-        <div className="bg-white rounded-lg shadow-md p-6 flex items-center space-x-4">
-          <div className="p-3 bg-green-100 rounded-full">
-            <CalendarCheck className="h-6 w-6 text-green-600" />
+        {/* Total Routines */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Rutinas</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {stats?.routines?.totalRoutines || 0}
+              </p>
+            </div>
+            <Target className="h-8 w-8 text-green-600" />
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Entrenamientos Completados</p>
-            <p className="text-2xl font-semibold text-gray-900">{workoutStats?.completedWorkouts || 0}</p>
-          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            {stats?.routines?.totalExercises || 0} ejercicios totales
+          </p>
         </div>
 
-        {/* Tarjeta: Duración Promedio */}
-        <div className="bg-white rounded-lg shadow-md p-6 flex items-center space-x-4">
-          <div className="p-3 bg-blue-100 rounded-full">
-            <Clock className="h-6 w-6 text-blue-600" />
+        {/* Total Weight */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Peso Total</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {stats?.workouts?.totalWeightLifted?.toFixed(0) || 0} kg
+              </p>
+            </div>
+            <Dumbbell className="h-8 w-8 text-purple-600" />
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Duración Promedio</p>
-            <p className="text-2xl font-semibold text-gray-900">{workoutStats?.avgDurationMinutes ? `${workoutStats.avgDurationMinutes} min` : 'N/A'}</p>
-          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            {stats?.workouts?.totalReps || 0} repeticiones
+          </p>
         </div>
 
-        {/* Tarjeta: Total Series */}
-        <div className="bg-white rounded-lg shadow-md p-6 flex items-center space-x-4">
-          <div className="p-3 bg-purple-100 rounded-full">
-            <List className="h-6 w-6 text-purple-600" />
+        {/* Average Duration */}
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Duración Promedio</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {stats?.workouts?.avgDurationMinutes || 0}m
+              </p>
+            </div>
+            <Clock className="h-8 w-8 text-orange-600" />
           </div>
-          <div>
-            <p className="text-sm text-gray-500">Total Series</p>
-            <p className="text-2xl font-semibold text-gray-900">{workoutStats?.totalSets || 0}</p>
-          </div>
-        </div>
-
-        {/* Tarjeta: Peso Total Levantado */}
-        <div className="bg-white rounded-lg shadow-md p-6 flex items-center space-x-4">
-          <div className="p-3 bg-yellow-100 rounded-full">
-            <TrendingUp className="h-6 w-6 text-yellow-600" />
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">Peso Total Levantado</p>
-            <p className="text-2xl font-semibold text-gray-900">{workoutStats?.totalWeightLifted ? `${workoutStats.totalWeightLifted.toFixed(0)} kg` : 'N/A'}</p>
-          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Por entrenamiento
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Sección de Acciones Rápidas */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Recent Workouts */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Acciones Rápidas</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Link to="/routines/new" className="btn-primary flex items-center justify-center py-3">
-              <PlusCircle className="h-5 w-5 mr-2" />
-              Crear Nueva Rutina
-            </Link>
-            <Link to="/routines" className="btn-secondary flex items-center justify-center py-3">
-              <List className="h-5 w-5 mr-2" />
-              Ver Mis Rutinas
-            </Link>
-            <Link to="/workouts" className="btn-secondary flex items-center justify-center py-3">
-              <History className="h-5 w-5 mr-2" />
-              Ver Historial
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <TrendingUp className="h-5 w-5 mr-2 text-blue-600" />
+              Entrenamientos Recientes
+            </h2>
+            <Link to="/workouts" className="text-sm text-primary-600 hover:text-primary-700">
+              Ver todos
             </Link>
           </div>
+          
+          {recentWorkouts.length > 0 ? (
+            <div className="space-y-3">
+              {recentWorkouts.slice(0, 5).map((workout) => (
+                <div key={workout.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{workout.routineName}</p>
+                    <div className="flex items-center space-x-4 text-sm text-gray-500">
+                      <span className="flex items-center">
+                        <Calendar className="h-4 w-4 mr-1" />
+                        {new Date(workout.startedAt).toLocaleDateString('es-ES')}
+                      </span>
+                      <span className="flex items-center">
+                        <Clock className="h-4 w-4 mr-1" />
+                        {formatDuration(workout.duration)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      workout.isCompleted 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-yellow-100 text-yellow-800'
+                    }`}>
+                      {workout.isCompleted ? 'Completado' : 'En progreso'}
+                    </span>
+                    <Link
+                      to={`/workouts/${workout.id}`}
+                      className="text-primary-600 hover:text-primary-700"
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Activity className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 mb-4">No tienes entrenamientos recientes</p>
+              <Link to="/routines" className="btn-primary text-sm">
+                Comenzar Entrenamiento
+              </Link>
+            </div>
+          )}
         </div>
 
-        {/* Sección de Últimos Entrenamientos */}
+        {/* Recent Routines */}
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Últimos Entrenamientos</h2>
-          {recentWorkouts.length > 0 ? (
-            <ul className="space-y-3">
-              {recentWorkouts.map((workout) => (
-                <li key={workout.id} className="border-b border-gray-100 pb-3 last:border-b-0 last:pb-0">
-                  <Link to={`/workouts/${workout.id}`} className="block hover:bg-gray-50 -mx-2 px-2 py-1 rounded-md">
-                    <p className="text-md font-medium text-gray-800">{workout.routineName}</p>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+              <Target className="h-5 w-5 mr-2 text-green-600" />
+              Mis Rutinas
+            </h2>
+            <Link to="/routines" className="text-sm text-primary-600 hover:text-primary-700">
+              Ver todas
+            </Link>
+          </div>
+          
+          {recentRoutines.length > 0 ? (
+            <div className="space-y-3">
+              {recentRoutines.slice(0, 5).map((routine) => (
+                <div key={routine.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{routine.name}</p>
                     <p className="text-sm text-gray-500">
-                      {format(new Date(workout.startedAt), 'dd MMM yyyy, HH:mm', { locale: es })}
-                      {' '}
-                      {workout.isCompleted ? `(${formatDuration(workout.duration)})` : '(En progreso)'}
+                      {routine.exercises?.length || 0} ejercicios
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {workout.exercises.join(', ')}
-                    </p>
-                  </Link>
-                </li>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Link
+                      to={`/workout/start/${routine.id}`}
+                      className="btn-primary text-sm flex items-center"
+                    >
+                      <Play className="h-4 w-4 mr-1" />
+                      Entrenar
+                    </Link>
+                  </div>
+                </div>
               ))}
-            </ul>
+            </div>
           ) : (
-            <p className="text-gray-500">No hay entrenamientos recientes. ¡Empieza a entrenar!</p>
+            <div className="text-center py-8">
+              <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <p className="text-gray-500 mb-4">No tienes rutinas creadas</p>
+              <Link to="/routines/new" className="btn-primary text-sm flex items-center mx-auto w-fit">
+                <Plus className="h-4 w-4 mr-1" />
+                Crear Rutina
+              </Link>
+            </div>
           )}
         </div>
       </div>
-    </div>
-  );
-};
 
-export default DashboardPage;
+      {/* Quick Actions */}
+      <div className="mt-8 bg-gradient-to-r from-primary-500 to-primary-600 rounded-lg p-6 text-white">
+        <h3 className="text-lg font-semibold mb-4">Acciones Rápidas</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <Link
+            to="/routines/new"
+            className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
+          >
+            <Plus className="h-8 w-8 mx-auto mb-2" />
+            <p className="font-medium">Crear Rutina</p>
+          </Link>
+          <Link
+            to="/routines"
+            className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
+          >
+            <Play className="h-8 w-8 mx-auto mb-2" />
+            <p className="font-medium">Entrenar Ahora</p>
+          </Link>
+          <Link
+            to="/workouts"
+            className="bg-white bg-opacity-20 hover:bg-opacity-30 rounded-lg p-4 text-center transition-colors"
+          >
+            <BarChart3 className="h-8 w-8 mx-auto mb-2" />
+            <p className="font-medium">Ver Progreso</p>
+          </Link>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default DashboardPage
