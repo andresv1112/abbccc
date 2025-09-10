@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 
 const RegisterPage: React.FC = () => {
   const { register, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -37,6 +38,7 @@ const RegisterPage: React.FC = () => {
 
     try {
       await register(formData.username, formData.password)
+      navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al crear la cuenta')
     } finally {

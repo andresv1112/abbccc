@@ -1,11 +1,12 @@
 import React, { useState } from 'react'
-import { Link, Navigate } from 'react-router-dom'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import LoadingSpinner from '../components/LoadingSpinner'
 import ErrorMessage from '../components/ErrorMessage'
 
 const LoginPage: React.FC = () => {
   const { login, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
   const [formData, setFormData] = useState({
     username: '',
     password: ''
@@ -24,6 +25,7 @@ const LoginPage: React.FC = () => {
 
     try {
       await login(formData.username, formData.password)
+      navigate('/dashboard')
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error al iniciar sesión')
     } finally {
